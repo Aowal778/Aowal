@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#17365d">
+<meta name="description" content="Personal Engineering Task Manager - To-do Work List">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Personal Engineering Task Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#17365d;--blue:#245b8f;--bg:#f3f6fa;--ink:#1f2937;--muted:#64748b;--line:#e2e8f0;--green:#16834b;--amber:#b7791f;--red:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:linear-gradient(120deg,#17365d,#245b8f);color:white;padding:22px max(18px,calc((100% - 1180px)/2))}
+h1{font-size:clamp(21px,3vw,30px);margin:0 0 4px}header p{margin:0;color:#dbeafe}
+main{max-width:1180px;margin:22px auto;padding:0 16px 40px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+button,.filelabel{border:0;border-radius:10px;padding:10px 14px;font-weight:650;cursor:pointer;background:var(--navy);color:white;font-size:14px}
+button.secondary,.filelabel.secondary{background:white;color:var(--navy);border:1px solid #cbd5e1}
+button.danger{background:#fff1f0;color:var(--red);border:1px solid #fecaca}
+button:focus,input:focus,select:focus{outline:3px solid #93c5fd;outline-offset:1px}
+.filelabel input{display:none}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.card{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 2px 8px #0f172a08}
+.kicker{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.metric{font-size:30px;font-weight:800;margin-top:4px}.metric.blue{color:#245b8f}.metric.green{color:var(--green)}.metric.amber{color:var(--amber)}
+.progress-wrap{margin-top:9px;height:9px;background:#e8edf3;border-radius:99px;overflow:hidden}.progress{height:100%;background:var(--green);width:0;transition:width .2s}
+.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px #0f172a08}
+.panelhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h2{font-size:18px;margin:0}.filters{display:flex;gap:8px;flex-wrap:wrap}
+input,select,textarea{border:1px solid #cbd5e1;border-radius:9px;padding:10px;background:white;color:var(--ink);font:inherit;min-width:0}
+#search{min-width:210px}
+.formgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#475569}
+.formgrid .wide{grid-column:span 2}.formgrid textarea{min-height:42px;resize:vertical}
+.formactions{display:flex;gap:8px;align-items:end}
+.tablewrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:850px}
+th,td{text-align:left;padding:11px 9px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;text-transform:uppercase;color:var(--muted);background:#f8fafc;letter-spacing:.03em}
+td.task{font-weight:650;min-width:240px}
+.status{display:inline-block;border-radius:99px;padding:4px 9px;font-size:12px;font-weight:750}
+.status.todo{background:#fff4dc;color:#8a5a00}.status.done{background:#e4f5eb;color:#12663a}
+.priority{font-size:12px;font-weight:700}.priority.High{color:#b42318}.priority.Medium{color:#a16207}.priority.Low{color:#15803d}
+.donecheck{width:19px;height:19px;accent-color:var(--green);cursor:pointer}
+.rowactions{display:flex;gap:6px}.rowactions button{padding:6px 9px;font-size:12px}
+.empty{text-align:center;padding:30px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin-top:12px}
+dialog{border:0;border-radius:16px;padding:0;width:min(620px,calc(100% - 24px));box-shadow:0 20px 70px #0f172a40}
+dialog::backdrop{background:#0f172a88}.modal{padding:20px}.modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#172b45;color:white;padding:10px 16px;border-radius:10px;display:none;z-index:5}
+@media(max-width:760px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.formgrid .wide{grid-column:span 2}main{margin-top:14px}.toolbar button,.toolbar .filelabel{flex:1;text-align:center}.panel{padding:13px}}
+@media(max-width:420px){.formgrid{grid-template-columns:1fr}.formgrid .wide{grid-column:span 1}#search{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header><h1>Personal Engineering Task Manager</h1><p>To-do Work List · Track assigned work, completion and deadlines</p></header>
+<main>
+ <div class="toolbar">
+  <button id="addBtn">＋ Add New Task</button>
+  <label class="filelabel secondary">Import Excel<input id="importFile" type="file" accept=".xlsx,.xls,.csv"></label>
+  <button class="secondary" id="exportBtn">Export to Excel</button>
+  <button class="secondary" id="csvBtn">Export CSV</button>
+ </div>
+ <section class="cards">
+  <div class="card"><div class="kicker">Total Tasks</div><div class="metric blue" id="total">0</div></div>
+  <div class="card"><div class="kicker">Completed</div><div class="metric green" id="completed">0</div></div>
+  <div class="card"><div class="kicker">Pending</div><div class="metric amber" id="pending">0</div></div>
+  <div class="card"><div class="kicker">Completion</div><div class="metric" id="percent">0%</div><div class="progress-wrap"><div class="progress" id="progress"></div></div></div>
+ </section>
+ <section class="panel">
+  <div class="panelhead"><h2 id="formTitle">Add a task</h2><span class="kicker">Task details</span></div>
+  <form id="taskForm">
+   <div class="formgrid">
+    <label>Received Date<input type="date" id="received"></label>
+    <label>Assigned By<input id="assigned" placeholder="e.g. Manager"></label>
+    <label class="wide">Work Description<input id="description" required placeholder="Describe the assigned work"></label>
+    <label>Department / Line<input id="department" placeholder="e.g. Chocolate Bar"></label>
+    <label>Priority<select id="priority"><option>Medium</option><option>High</option><option>Low</option></select></label>
+    <label>Deadline<input type="date" id="deadline"></label>
+    <label>Remarks / Update<input id="remarks" placeholder="Optional update"></label>
+    <div class="formactions"><button type="submit" id="saveBtn">Save Task</button><button type="button" class="secondary" id="cancelEdit" hidden>Cancel</button></div>
+   </div>
+  </form>
+ </section>
+ <section class="panel">
+  <div class="panelhead"><h2>My Tasks</h2><div class="filters">
+   <input id="search" placeholder="Search tasks…">
+   <select id="statusFilter"><option value="All">All Status</option><option value="To-do">To-do</option><option value="Done">Done</option></select>
+   <select id="priorityFilter"><option value="All">All Priorities</option><option>High</option><option>Medium</option><option>Low</option></select>
+  </div></div>
+  <div class="tablewrap"><table><thead><tr><th>Done</th><th>Task ID</th><th>Work Description</th><th>Assigned By</th><th>Department / Line</th><th>Priority</th><th>Deadline</th><th>Status</th><th>Actions</th></tr></thead><tbody id="taskRows"></tbody></table></div>
+  <div class="empty" id="empty">No tasks yet. Add your first task above or import your Excel workbook.</div>
+  <p class="note">Your tasks are saved in this browser on this device. Use Export to Excel for backup or to move your data. Import accepts the workbook columns from your To-do Work List sheet.</p>
+ </section>
+ <section class="panel">
+  <div class="panelhead"><h2>Completed Work</h2><span class="kicker" id="doneCount">0 completed</span></div>
+  <div id="completedList" class="note">Completed tasks will appear here.</div>
+ </section>
+</main>
+<dialog id="confirmDialog"><div class="modal"><div class="modalhead"><h2>Delete task?</h2><button class="secondary" id="closeDialog">Close</button></div><p>This task will be removed from this browser's task list.</p><button class="danger" id="confirmDelete">Delete task</button></div></dialog>
+<div id="toast"></div>
+<script>
+const KEY='personal-engineering-task-manager-v1';
+const $=id=>document.getElementById(id);
+let tasks=[], editingId=null, deletingId=null;
+const today=()=>new Date().toISOString().slice(0,10);
+function load(){try{tasks=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){tasks=[]}}
+function save(){localStorage.setItem(KEY,JSON.stringify(tasks));render()}
+function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2400)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmt(s){if(!s)return '—';const d=new Date(s+'T00:00:00');return isNaN(d)?esc(s):d.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'})}
+function nextId(){let max=0;tasks.forEach(t=>{const n=Number(String(t.id||'').replace(/\D/g,''));if(n>max)max=n});return 'T-'+String(max+1).padStart(3,'0')}
+function render(){
+ const total=tasks.length, done=tasks.filter(t=>t.done).length, pending=total-done, pct=total?Math.round(done/total*100):0;
+ $('total').textContent=total;$('completed').textContent=done;$('pending').textContent=pending;$('percent').textContent=pct+'%';$('progress').style.width=pct+'%';$('doneCount').textContent=done+' completed';
+ const q=$('search').value.toLowerCase(), sf=$('statusFilter').value,pf=$('priorityFilter').value;
+ const shown=tasks.filter(t=>(!q||[t.id,t.description,t.assigned,t.department,t.remarks].join(' ').toLowerCase().includes(q))&&(sf==='All'||(t.done?'Done':'To-do')===sf)&&(pf==='All'||t.priority===pf));
+ $('taskRows').innerHTML=shown.map(t=>`<tr>
+ <td><input class="donecheck" type="checkbox" aria-label="Mark ${esc(t.id)} done" data-check="${esc(t.id)}" ${t.done?'checked':''}></td>
+ <td>${esc(t.id)}</td><td class="task">${esc(t.description)}</td><td>${esc(t.assigned||'—')}</td><td>${esc(t.department||'—')}</td>
+ <td><span class="priority ${esc(t.priority)}">${esc(t.priority)}</span></td><td>${fmt(t.deadline)}</td>
+ <td><span class="status ${t.done?'done':'todo'}">${t.done?'Done':'To-do'}</span></td>
+ <td><div class="rowactions"><button class="secondary" data-edit="${esc(t.id)}">Edit</button><button class="danger" data-del="${esc(t.id)}">Delete</button></div></td></tr>`).join('');
+ $('empty').style.display=shown.length?'none':'block';
+ const completed=tasks.filter(t=>t.done);
+ $('completedList').innerHTML=completed.length?'<ul>'+completed.map(t=>`<li><b>${esc(t.id)}</b> — ${esc(t.description)} <span class="note">(${fmt(t.completionDate)})</span></li>`).join('')+'</ul>':'Completed tasks will appear here.';
+}
+function resetForm(){editingId=null;$('taskForm').reset();$('received').value=today();$('priority').value='Medium';$('formTitle').textContent='Add a task';$('saveBtn').textContent='Save Task';$('cancelEdit').hidden=true}
+$('taskForm').addEventListener('submit',e=>{e.preventDefault();const d=$('description').value.trim();if(!d)return;const old=tasks.find(t=>t.id===editingId);const t={id:editingId||nextId(),received:$('received').value,assigned:$('assigned').value.trim(),description:d,department:$('department').value.trim(),priority:$('priority').value,deadline:$('deadline').value,done:old?.done||false,completionDate:old?.completionDate||'',remarks:$('remarks').value.trim()};if(editingId)tasks=tasks.map(x=>x.id===editingId?t:x);else tasks.unshift(t);save();resetForm();toast('Task saved')});
+$('addBtn').addEventListener('click',()=>{$('description').focus();window.scrollTo({top:document.querySelector('form').getBoundingClientRect().top+window.scrollY-80,behavior:'smooth'})});
+$('cancelEdit').addEventListener('click',resetForm);
+$('taskRows').addEventListener('change',e=>{if(e.target.matches('[data-check]')){const t=tasks.find(x=>x.id===e.target.dataset.check);if(t){t.done=e.target.checked;t.completionDate=t.done?today():'';save();toast(t.done?'Marked as Done':'Moved to To-do')}}});
+$('taskRows').addEventListener('click',e=>{const id=e.target.dataset.edit;if(id){const t=tasks.find(x=>x.id===id);if(!t)return;editingId=id;$('received').value=t.received||'';$('assigned').value=t.assigned||'';$('description').value=t.description||'';$('department').value=t.department||'';$('priority').value=t.priority||'Medium';$('deadline').value=t.deadline||'';$('remarks').value=t.remarks||'';$('formTitle').textContent='Edit '+id;$('saveBtn').textContent='Update Task';$('cancelEdit').hidden=false;window.scrollTo({top:0,behavior:'smooth'})}const del=e.target.dataset.del;if(del){deletingId=del;$('confirmDialog').showModal()}});
+$('closeDialog').onclick=()=>$('confirmDialog').close();
+$('confirmDelete').onclick=()=>{tasks=tasks.filter(t=>t.id!==deletingId);$('confirmDialog').close();save();toast('Task deleted')};
+['search','statusFilter','priorityFilter'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',render));
+function exportRows(){return tasks.map(t=>({'Task ID':t.id,'Received Date':t.received,'Assigned By':t.assigned,'Work Description':t.description,'Department / Line':t.department,'Priority':t.priority,'Deadline':t.deadline,'Done? (☐ / ☑)':t.done?'☑':'☐','Status':t.done?'Done':'To-do','Completion Date':t.completionDate,'Remarks / Update':t.remarks}))}
+$('exportBtn').onclick=()=>{if(!window.XLSX){toast('Excel library unavailable. Check internet and reload.');return}const data=exportRows();const wb=XLSX.utils.book_new();const dash=[['PERSONAL ENGINEERING TASK DASHBOARD'],['Total Tasks',tasks.length],['Completed',tasks.filter(t=>t.done).length],['Pending',tasks.filter(t=>!t.done).length],['Completion %',tasks.length?tasks.filter(t=>t.done).length/tasks.length:0]];const ws1=XLSX.utils.aoa_to_sheet(dash);const ws2=XLSX.utils.json_to_sheet(data);const ws3=XLSX.utils.json_to_sheet(data.filter(x=>x.Status==='Done'));XLSX.utils.book_append_sheet(wb,ws1,'Dashboard');XLSX.utils.book_append_sheet(wb,ws2,'To-do Work List');XLSX.utils.book_append_sheet(wb,ws3,'Completed Work');XLSX.writeFile(wb,'To-do_Work_List_Export.xlsx');toast('Excel file exported')};
+$('csvBtn').onclick=()=>{const rows=exportRows(),cols=Object.keys(rows[0]||{'Task ID':''});const csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='To-do_Work_List.csv';a.click();URL.revokeObjectURL(a.href)};
+$('importFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;if(!window.XLSX){toast('Excel library unavailable. Check internet and reload.');return}try{const buf=await f.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:true});const sheet=wb.Sheets['To-do Work List']||wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});let imported=0;for(const r of rows){const desc=r['Work Description']||r['Work Description ']||r['Task']||r['Description'];if(!desc)continue;const done=String(r['Status']||'').toLowerCase()==='done'||String(r['Done? (☐ / ☑)']||'').includes('☑')||r['Done? (☐ / ☑)']===true;const rawDate=v=>v instanceof Date?v.toISOString().slice(0,10):String(v||'').slice(0,10);tasks.push({id:nextId(),received:rawDate(r['Received Date']),assigned:r['Assigned By']||'',description:String(desc),department:r['Department / Line']||'',priority:['High','Medium','Low'].includes(r['Priority'])?r['Priority']:'Medium',deadline:rawDate(r['Deadline']),done,completionDate:rawDate(r['Completion Date']),remarks:r['Remarks / Update']||''});imported++}save();toast(imported+' task(s) imported')}catch(err){toast('Could not import this file. Check the workbook format.')}e.target.value=''});
+load();resetForm();render();
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(err => console.log('Service worker registration failed:', err))); }
+</script>
+</body></html>
